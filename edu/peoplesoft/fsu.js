@@ -64,25 +64,45 @@ const getJobLinks = async (page) => {
      * Wait for Email Job page to load within iframe
      */
     await page.waitForFunction((text) => {
-        return Array.from(document.querySelectorAll('iframe'))
-            .map(iframe => iframe.contentWindow.document.querySelector('title').innerText)
-            .filter(e => e === 'Email Job')
-            .length > 0;
-    }, {}, 'Email Job'
-    );
+        const iframe = Array.from(document.querySelectorAll('iframe'))
+              .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText)[0];
+
+        let span = iframe.contentWindow.document.querySelector('span#HRS_EMLFRND_WRK_HRS_CRSP_MSG');
+        return span !== null;
+    }, {});
 
     /* Grab the URL from the text of the email */
     j.url = await page.evaluate(() => {
-        $('#HRS_EMLFRND_WRK_HRS_CRSP_MSG').contents().filter(function() {
-            return this.nodeType == 3 && /jobs\.omni\.fsu/.test($(this).text());
-        }).text();
+        let iframe = Array.from(document.querySelectorAll('iframe'))
+            .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText)[0];
+        
+        let span = iframe.contentWindow.document.querySelector('span#HRS_EMLFRND_WRK_HRS_CRSP_MSG');
+        console.log(`span => ${span}`);
+        
+        /* Iterate through the text nodes until we find the one containing the job link */
+        let tw = document.createTreeWalker(span, NodeFilter.SHOW_TEXT,
+            {
+                acceptNode: function(node) {
+                    if ( /jobs\.omni\.fsu/.test(node.data) ) {
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                }
+            }, false);
+
+        let nn = tw.nextNode();
+        return nn.data;
     });
 
     /*
      * Now click cancel to get back to the description page so we can move onto the
      * next job
      */
-    const cancelBtn = await page.$('a#HRS_APPL_WRK_HRS_CANCEL_BTN')
+    const iframe = await page.evaluateHandle(() => {
+        return Array.from(document.querySelectorAll('iframe'))
+            .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText)[0];
+    });
+
+    //const cancelBtn = await page.$('a#HRS_APPL_WRK_HRS_CANCEL_BTN')
     await cancelBtn.click();
     await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02');
 
@@ -102,6 +122,8 @@ const main = async () => {
     const browser = await puppeteer.launch({ slowMo: 250, headless: false, devtools: true });
     const page = await browser.newPage();
 
+    page.on('console', msg => console.log('<CONSOLE> ', msg.text()));
+    
     await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery    
     await page.goto(Company.jobs_page);
     
