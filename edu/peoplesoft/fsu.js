@@ -83,48 +83,64 @@ const getJobData = async (page) => {
 
 const getJobLinks = async (page) => {
     const viewAllJobs = await page.$('a#NAV_PB\\$1');
-    await viewAllJobs.click();
-
-    // Job listing IDs have form HRS_AGNT_RSLT_I$0_row_0
+    await viewAllJobs.click(),
+    
     await page.waitForFunction(() => {
-        return Array.from(document.querySelectorAll('li[id^="HRS_AGNT_RSLT_I\\$"]')).filter(function(e) {
+        let li = Array.from(document.querySelectorAll('li[id^="HRS_AGNT_RSLT_I\\$"]')).filter(function(e) {
             return /^HRS_AGNT_RSLT_I\$\d+_row_\d+$/.test(e.id);
-        }).length > 0;
+        });
+        
+        if (li.length === 0) {
+            return false;
+        }
+
+        let div = document.querySelector('div#WAIT_win0');
+        return div.style.display === 'none';
     }, {});
 
     const firstJobLink = await page.$('li[id^="HRS_AGNT_RSLT_I\\$"]');
     await firstJobLink.click();
-    
-    const mainDiv = await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02'); /* Wait for page to load */
 
     const jobs = [];
+
+    while (true) {
+        /* Wait for page to load */    
+        await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02'); 
+
+        jobs.push(await getJobData(page));
     
-    /* until (noMoreJobs) { */
-    jobs.push(await getJobData(page));
-    
-    /*
-     * Click onto the Next Job until we've gone through them all..
-     */
-    const nextJob = await page.$('a#DERIVED_HRS_FLU_HRS_NEXT_PB');
-    await nextJob.click();
-    await waitUntilStale(page, nextJob);
-    
-    await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02');    
+        /* Click onto the Next Job until we've gone through them all.. */
+        const nextJob = await page.$('a#DERIVED_HRS_FLU_HRS_NEXT_PB');
+        const linkDisabled = await page.evaluate(a => a.getAttribute('aria-disabled'), nextJob);
+
+        console.log(`linkDisabled ${linkDisabled}`);
+        
+        if (linkDisabled) {
+            break;
+        }
+
+        console.log(`Scraped ${jobs.length} jobs`);
+        
+        await nextJob.click();
+        await waitUntilStale(page, nextJob);
+    }    
+
+    return jobs;
 };
 
 const main = async () => {
-    const browser = await puppeteer.launch({ slowMo: 250, headless: false, devtools: true });
-    const page = await browser.newPage();
+    //const browser = await puppeteer.launch({ slowMo: 250, headless: false, devtools: true });
+    const browser = await puppeteer.launch();
+    const [page] = await browser.pages();
 
-    page.on('console', msg => console.log('<CONSOLE> ', msg.text()));
-    
     await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery    
     await page.goto(Company.jobs_page);
-    
     await page.waitForFunction(
         text => text === document.querySelector('a#NAV_PB\\$1 > span.ps-text').innerText,
         {}, 'View All Jobs'
     );
+
+    page.on('console', msg => console.log('<CONSOLE> ', msg.text()));
     
     const jobs = await getJobLinks(page);
 
