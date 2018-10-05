@@ -59,26 +59,33 @@ const getJobLinks = async (page) => {
      */
     const emailThisJob = await page.$('a[id^="HRS_SCH_WRK_HRS_CE_EML_FRND"]');
     await emailThisJob.click();
-    
+
     /* 
      * Wait for Email Job page to load within iframe
      */
-    await page.waitForFunction((text) => {
-        const iframe = Array.from(document.querySelectorAll('iframe'))
-              .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText)[0];
+    await page.waitForFunction(() => {
+        let a = Array.from(document.querySelectorAll('iframe'))
+            .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText);
+        
+        if (a.length < 1) {
+            return false;
+        }
 
-        let span = iframe.contentWindow.document.querySelector('span#HRS_EMLFRND_WRK_HRS_CRSP_MSG');
-        return span !== null;
+        let span = a[0].contentWindow.document.querySelector('span#HRS_EMLFRND_WRK_HRS_CRSP_MSG');
+        if (span === null) {
+            return false;
+        }
+
+        return true;
     }, {});
-
+    
     /* Grab the URL from the text of the email */
     j.url = await page.evaluate(() => {
-        let iframe = Array.from(document.querySelectorAll('iframe'))
-            .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText)[0];
-        
-        let span = iframe.contentWindow.document.querySelector('span#HRS_EMLFRND_WRK_HRS_CRSP_MSG');
-        console.log(`span => ${span}`);
-        
+        let a = Array.from(document.querySelectorAll('iframe'))
+            .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText);    
+
+        let span = a[0].contentWindow.document.querySelector('span#HRS_EMLFRND_WRK_HRS_CRSP_MSG');
+
         /* Iterate through the text nodes until we find the one containing the job link */
         let tw = document.createTreeWalker(span, NodeFilter.SHOW_TEXT,
             {
@@ -97,12 +104,18 @@ const getJobLinks = async (page) => {
      * Now click cancel to get back to the description page so we can move onto the
      * next job
      */
-    const iframe = await page.evaluateHandle(() => {
-        return Array.from(document.querySelectorAll('iframe'))
-            .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText)[0];
+    const docHandle = await page.evaluateHandle(() => {
+        const iframe = Array.from(document.querySelectorAll('iframe'))
+              .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText)[0];
+
+        return iframe.contentWindow.document;
     });
 
-    //const cancelBtn = await page.$('a#HRS_APPL_WRK_HRS_CANCEL_BTN')
+    const cancelBtn = await page.evaluateHandle((doc) => {
+        debugger;
+        return doc.querySelector('a#HRS_APPL_WRK_HRS_CANCEL_BTN');
+    }, docHandle);
+    
     await cancelBtn.click();
     await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02');
 
