@@ -10,25 +10,18 @@ const Company = {
     jobs_page: 'https://jobs.omni.fsu.edu/psc/sprdhr_er/EMPLOYEE/HRMS/c/HRS_HRAM_FL.HRS_CG_SEARCH_FL.GBL?FOCUS=Applicant&Page=HRS_APP_SCHJOB&Action=U&FOCUS=Applicant&SiteId=1'
 };
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+/*
+ * Wait until elem becomes detached from DOM
+ */
+async function waitUntilStale(page, elem) {
+    await page.waitForFunction(
+        e => !e.ownerDocument.contains(e),
+        { polling: 'raf' }, elem
+    );
 }
 
-/* https://github.com/GoogleChrome/puppeteer/issues/1361#issuecomment-343748051 */
-async function waitForFrame(page, name) {
-    let fulfill;
-    const promise = new Promise(x => fulfill = x);
-    checkFrame();
-    return promise;
-
-    async function checkFrame() {
-        const frame = await page.frames().find(f => f.name() === name);
-        if (frame) {
-            fulfill(frame);
-        } else {
-            page.once('frameattached', checkFrame);
-        }
-    }
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 const getJobData = async (page) => {
@@ -81,11 +74,7 @@ const getJobData = async (page) => {
 
     }, {}, iframeDoc)).jsonValue();
 
-    const cancelBtn = await page.evaluateHandle((doc) => {
-        debugger;
-        return doc.querySelector('a#HRS_APPL_WRK_HRS_CANCEL_BTN');
-    }, iframeDoc);
-    
+    const cancelBtn = await page.evaluateHandle(doc => doc.querySelector('a#HRS_APPL_WRK_HRS_CANCEL_BTN'), iframeDoc);
     await cancelBtn.click();
     await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02');
 
@@ -118,6 +107,8 @@ const getJobLinks = async (page) => {
      */
     const nextJob = await page.$('a#DERIVED_HRS_FLU_HRS_NEXT_PB');
     await nextJob.click();
+    await waitUntilStale(page, nextJob);
+    
     await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02');    
 };
 
