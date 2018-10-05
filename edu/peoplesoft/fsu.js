@@ -31,60 +31,41 @@ async function waitForFrame(page, name) {
     }
 }
 
-const getJobLinks = async (page) => {
-    const viewAllJobs = await page.$('a#NAV_PB\\$1');
-    await viewAllJobs.click();
-
-    // Job listing IDs have form HRS_AGNT_RSLT_I$0_row_0
-    await page.waitForFunction(() => {
-        return Array.from(document.querySelectorAll('li[id^="HRS_AGNT_RSLT_I\\$"]')).filter(function(e) {
-            return /^HRS_AGNT_RSLT_I\$\d+_row_\d+$/.test(e.id);
-        }).length > 0;
-    }, {});
-
-    const jobs = [];
-    const firstJobLink = await page.$('li[id^="HRS_AGNT_RSLT_I\\$"]');
-    await firstJobLink.click();
-
-    /* Wait for page to load */
-    await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02');
-    
+const getJobData = async (page) => {
     const j = {};
+    
     j.title = await page.$eval('span#HRS_SCH_WRK2_POSTING_TITLE', span => span.innerText);
     j.location = await page.evaluate(() => $('span#HRS_SCH_WRK_HRS_DESCRLONG').text())
     j.description = await page.evaluate(() => $('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02').html());
 
     /*
-     * To get the URL, we click into the 'Email this job' page and take the link they list on there
+     * To get the URL, we click into the 'Email this job' page and take the link from the text
+     * of the email message
      */
     const emailThisJob = await page.$('a[id^="HRS_SCH_WRK_HRS_CE_EML_FRND"]');
     await emailThisJob.click();
 
-    /* 
-     * Wait for Email Job page to load within iframe
-     */
-    await page.waitForFunction(() => {
+    const iframeDoc = await page.waitForFunction(() => {
         let a = Array.from(document.querySelectorAll('iframe'))
-            .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText);
+            .filter(
+                iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText
+            );
         
         if (a.length < 1) {
             return false;
         }
+        
+        return a[0].contentWindow.document;
+    });
 
-        let span = a[0].contentWindow.document.querySelector('span#HRS_EMLFRND_WRK_HRS_CRSP_MSG');
+    /* 
+     * Wait for Email Job page to load within iframe and then grab the URL from the text of the email
+     */
+    j.url = await (await page.waitForFunction((doc) => {
+        let span = doc.querySelector('span#HRS_EMLFRND_WRK_HRS_CRSP_MSG');
         if (span === null) {
             return false;
         }
-
-        return true;
-    }, {});
-    
-    /* Grab the URL from the text of the email */
-    j.url = await page.evaluate(() => {
-        let a = Array.from(document.querySelectorAll('iframe'))
-            .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText);    
-
-        let span = a[0].contentWindow.document.querySelector('span#HRS_EMLFRND_WRK_HRS_CRSP_MSG');
 
         /* Iterate through the text nodes until we find the one containing the job link */
         let tw = document.createTreeWalker(span, NodeFilter.SHOW_TEXT,
@@ -96,39 +77,48 @@ const getJobLinks = async (page) => {
                 }
             }, false);
 
-        let nn = tw.nextNode();
-        return nn.data;
-    });
+        return tw.nextNode().data; /* return truthy value */
 
-    /*
-     * Now click cancel to get back to the description page so we can move onto the
-     * next job
-     */
-    const docHandle = await page.evaluateHandle(() => {
-        const iframe = Array.from(document.querySelectorAll('iframe'))
-              .filter(iframe => 'Email Job' === iframe.contentWindow.document.querySelector('title').innerText)[0];
-
-        return iframe.contentWindow.document;
-    });
+    }, {}, iframeDoc)).jsonValue();
 
     const cancelBtn = await page.evaluateHandle((doc) => {
         debugger;
         return doc.querySelector('a#HRS_APPL_WRK_HRS_CANCEL_BTN');
-    }, docHandle);
+    }, iframeDoc);
     
     await cancelBtn.click();
     await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02');
 
+    return j;
+};
+
+const getJobLinks = async (page) => {
+    const viewAllJobs = await page.$('a#NAV_PB\\$1');
+    await viewAllJobs.click();
+
+    // Job listing IDs have form HRS_AGNT_RSLT_I$0_row_0
+    await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('li[id^="HRS_AGNT_RSLT_I\\$"]')).filter(function(e) {
+            return /^HRS_AGNT_RSLT_I\$\d+_row_\d+$/.test(e.id);
+        }).length > 0;
+    }, {});
+
+    const firstJobLink = await page.$('li[id^="HRS_AGNT_RSLT_I\\$"]');
+    await firstJobLink.click();
+    
+    const mainDiv = await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02'); /* Wait for page to load */
+
+    const jobs = [];
+    
+    /* until (noMoreJobs) { */
+    jobs.push(await getJobData(page));
+    
     /*
      * Click onto the Next Job until we've gone through them all..
      */
     const nextJob = await page.$('a#DERIVED_HRS_FLU_HRS_NEXT_PB');
     await nextJob.click();
     await page.waitFor('div#win0divDERIVED_HRS_CG_HRS_GRPBOX_02');    
-};
-
-const getJobs = async (page) => {
-
 };
 
 const main = async () => {
