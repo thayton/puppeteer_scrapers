@@ -103,44 +103,32 @@ const getJobLinks = async () => {
      * resp.data - { opportunities: Array(20), totalCount: 66 }
      */
     const jobs = [];
-    const urlObj = url.parse(
+    const urlParts = url.parse(
         'https://recruiting.ultipro.com/WOO1009/JobBoard/97967b39-b3fa-4972-8da3-2af68e0ffa86/OpportunityDetail?opportunityId=xxx'
         , true /* parseQueryString */
     );
-    urlObj.search = null; /* so that query will be used by url.format() instead */
+    
+    urlParts.search = null; /* so that query will be used by url.format() instead */
 
-    let resp = await axios.get(Company.jobs_page);
+    let resp;
     
     do {
-        resp = await axios.post(postUrl, JSON.stringify(payload), {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36',
-                'Referer': 'https://recruiting.ultipro.com/WOO1009/JobBoard/97967b39-b3fa-4972-8da3-2af68e0ffa86/?q=&o=postedDateDesc',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-RequestVerificationToken': 'ycl_yS4eo6SaSXSZ5dfxB03-q9LFUM36_tJAzi4Zs-tSNV20_mvK_HGG7eIm7kEDFCYgA8h_Bwub_P5A66q6vI2Onu0-VcrdmkXM33lpH3xNwH7p74rFTtSFi78nf70OYz479Q2',
-                'Cookie': '__RequestVerificationToken=XqGOOUeo_9t1RMe1hs4QvFuHulh3mgIW5zmlIRiBYv246uP2r_Zqbgr6Nt6f_ZDvI6ad5sjXs1kKWFaWg_u36WBxK_01;',
-                'Content-Type': 'application/json; charset=UTF-8',
-                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                'Origin': 'https://recruiting.ultipro.com' 
-            }
-
-        });
-
+        resp = await axios.post(postUrl, payload);
+        
         resp.data.opportunities.forEach(o => {
             let j = {};
             let l = o.Locations[0].Address;
 
-            urlObj.query.opportunityId = o.Id;
+            urlParts.query.opportunityId = o.Id;
             
             j.title = o.Title;
-            j.url = url.format(urlObj);
+            j.url = url.format(urlParts);
             j.location = l.City + ', ' + l.State.Name;
             
             jobs.push(j);
         });
 
         payload.opportunitySearch.Skip += jobs.length;
-        console.log(`# jobs: ${jobs.length}`);
         
     } while (jobs.length < resp.data.totalCount);
 
@@ -149,6 +137,7 @@ const getJobLinks = async () => {
 
 const main = async () => {
     const jobs = await getJobLinks();
+    return jobs;
 };
 
 main().then((jobs) => {
