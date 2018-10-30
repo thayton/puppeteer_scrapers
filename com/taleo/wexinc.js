@@ -43,8 +43,8 @@ const getJobLinks = async (page) => {
               .filter((i, tr) => /^job\d+$/.test(tr.id))
               .each((i, tr) => {
                   const j = {};
-                      
-                  j.url = $(tr).find('th span > a').attr('href');
+                  
+                  j.url = $(tr).find('th span > a')[0].href;
                   j.title = $(tr).find('th span > a').text();
                   j.location = $(tr).find('td:eq(1)').text();
                   
@@ -70,8 +70,9 @@ const getJobs = async (page) => {
         jobs = jobs.concat(await getJobLinks(page));        
 
         let nextPage = await page.$('a#next');
-        let nextPageDisabled = await nextPage.getProperty('aria-disabled');
-        if (nextPageDisabled)
+        let nextPageDisabled = await page.evaluate(a => a.getAttribute('aria-disabled'), nextPage);
+        
+        if (nextPageDisabled !== 'false')
             break;
 
         await nextPage.click();
