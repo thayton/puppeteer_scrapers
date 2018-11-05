@@ -20,10 +20,19 @@ const toJquery = (html) => {
 
 const timestamp = () => Math.round( new Date().getTime() / 1000 );
 
+const getJobDescriptions = async (jobs) => {
+    for (const j of jobs) {
+        const resp = await axios.get(j.url);
+        const $ = toJquery(resp.data);
+
+        j.description = $('div#job').html().trim();
+        j.location = $('span.location').text().trim();
+    }
+};
 
 const getJobLinks = async () => {
     const params = {
-        'page': 2,
+        'page': 1,
         'page-items': 20,
         'ts': timestamp()
     };
@@ -60,6 +69,7 @@ const getJobLinks = async () => {
 
 const main = async () => {
     const jobs = await getJobLinks();
+    await getJobDescriptions(jobs);
     return jobs;
 };
 
