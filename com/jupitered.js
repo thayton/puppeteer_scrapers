@@ -52,7 +52,21 @@ const main = async () => {
     const loginBtn = await page.$('div#loginbtn');
     await loginBtn.click();
 
+    /* Extract the To Do items */
     await page.waitFor('div#mainpage');
+    const div = (await page.$x(
+        '//div[@id="sidebar"]/div[@val="todo"]'
+    ))[0];
+    await div.click();
+
+    await page.waitFor(() => {
+        debugger;
+        const div = document.evaluate(
+            '//div[@id="sidebar"]/div[@val="todo"]', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+        ).singleNodeValue;
+        const bgColor = window.getComputedStyle(div).getPropertyValue('background-color');
+        return bgColor === 'rgb(51, 179, 204)';
+    });
     
     await browser.close(); 
 };
