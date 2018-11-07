@@ -60,7 +60,6 @@ const main = async () => {
     await div.click();
 
     await page.waitFor(() => {
-        debugger;
         const div = document.evaluate(
             '//div[@id="sidebar"]/div[@val="todo"]', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
         ).singleNodeValue;
