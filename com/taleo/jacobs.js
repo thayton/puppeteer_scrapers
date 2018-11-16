@@ -13,12 +13,8 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-const getJobLinks = async (page) => {
-    await page.goto(Company.jobs_page);
-    await page.waitFor(
-        () => document.querySelector('span#currentPageInfo').innerText !== ''
-    );
 
+const getPageJobLinks = async (page) => {
     await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery
     const jobs = await page.evaluate(() => {
         const jobs = [];
@@ -39,6 +35,35 @@ const getJobLinks = async (page) => {
         return jobs;
     });
 
+    return jobs;
+};
+
+const getJobLinks = async (page) => {
+    let prevText = '';
+    let jobs = [];
+    
+    await page.goto(Company.jobs_page);
+
+    while (true) {
+        await page.waitFor(
+            prevText => document.querySelector('span#currentPageInfo').innerText !== prevText,
+            prevText
+        );
+
+        jobs = jobs.concat( await getPageJobLinks(page) );
+        
+        const nextPage = await page.$('a#next');
+        const disabled = await page.evaluate((e, a) => e.getAttribute(a), nextPage, 'aria-disabled');
+
+        prevText = await page.evaluate(() => document.querySelector('span#currentPageInfo').innerText);
+        
+        if (disabled === 'true') {
+            break;
+        }
+
+        await nextPage.click();
+    }
+    
     return jobs;
 };
 
