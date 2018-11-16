@@ -38,30 +38,48 @@ const getPageJobLinks = async (page) => {
     return jobs;
 };
 
-const getJobLinks = async (page) => {
+const getWaitForJobsToLoad = (page) => {
     let prevText = '';
-    let jobs = [];
     
-    await page.goto(Company.jobs_page);
-
-    while (true) {
+    return async () => {
         await page.waitFor(
             prevText => document.querySelector('span#currentPageInfo').innerText !== prevText,
             prevText
         );
+        
+        prevText = await page.evaluate(
+            () => document.querySelector('span#currentPageInfo').innerText
+        );
+    };
+};
 
+const getJobLinks = async (page) => {
+    let waitForJobsToLoad = getWaitForJobsToLoad(page);
+    
+    await page.goto(Company.jobs_page);
+    await waitForJobsToLoad();
+
+    /* Limit it to the JSEG jobs in Huntsville */
+    const input = await page.$('input#KEYWORD');
+    await input.type('jseg');
+    
+    await page.click('input#search');
+    await page.waitFor(i => i.value === 'jseg', {}, input);
+
+    let jobs = [];
+    
+    while (true) {
         jobs = jobs.concat( await getPageJobLinks(page) );
         
         const nextPage = await page.$('a#next');
         const disabled = await page.evaluate((e, a) => e.getAttribute(a), nextPage, 'aria-disabled');
 
-        prevText = await page.evaluate(() => document.querySelector('span#currentPageInfo').innerText);
-        
         if (disabled === 'true') {
             break;
         }
 
         await nextPage.click();
+        await waitForJobsToLoad();        
     }
     
     return jobs;
@@ -73,7 +91,6 @@ const getJobDescriptions = async (page, jobs) => {
         await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery
 
         j.description = await page.evaluate(() => $('div[class^="mastercontentpanel"] table.tablelist').html());
-        console.log(j);        
     }
 };
 
