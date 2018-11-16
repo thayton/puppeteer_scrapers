@@ -20,22 +20,26 @@ const getJobLinks = async (page) => {
     );
 
     await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery
-    await page.evaluate(() => {
+    const jobs = await page.evaluate(() => {
         const jobs = [];
         
         $('tr[id^="job"]').each(function (i, tr) {
-            debugger;
             const j = {};
+            const a = $(tr).find('a');
             
-            j.title = $(tr).find('a').contents()[0];
-            j.url = $(tr).find('a').attr('href')
+            j.title = a.contents()[0].textContent.trim();
+            j.url = a[0].href;
             j.location = $($(tr).find('td')[1]).text();
-            j.postingDate = $($(tr).find('td')[2]).text()
-            j.jobNumber = $($(tr).find('td')[3]).text()
+            j.postingDate = $($(tr).find('td')[2]).text();
+            j.jobNumber = $($(tr).find('td')[3]).text();
             
             jobs.push(j);
         });
+
+        return jobs;
     });
+
+    return jobs;
 };
 
 const main = async () => {
