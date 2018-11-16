@@ -42,8 +42,11 @@ const getWaitForJobsToLoad = (page) => {
     let prevText = '';
     
     return async () => {
+        console.log(`prevText = ${prevText}`);
+        
         await page.waitFor(
             prevText => document.querySelector('span#currentPageInfo').innerText !== prevText,
+            {}, /* opts */
             prevText
         );
         
@@ -89,17 +92,17 @@ const getJobDescriptions = async (page, jobs) => {
     for (const j of jobs) {
         await page.goto(j.url);
         await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery
-
         j.description = await page.evaluate(() => $('div[class^="mastercontentpanel"] table.tablelist').html());
     }
 };
 
 const main = async () => {
-    const browser = await puppeteer.launch({ slowMo: 250, headless: false, devtools: true });
+    //const browser = await puppeteer.launch({ slowMo: 250, headless: false, devtools: true });
+    const browser = await puppeteer.launch();    
     const [ page ] = await browser.pages();
 
     const jobs = await getJobLinks(page);
-    await getJobDescriptions(page, jobs);
+    //await getJobDescriptions(page, jobs);
     
     page.on('console', msg => console.log('> ', msg.text()));
 
@@ -109,5 +112,6 @@ const main = async () => {
 };
 
 main().then((jobs) => {
+    console.log(`# jobs = ${jobs.length}`);
     console.log(JSON.stringify(jobs, null, 2));
 });
