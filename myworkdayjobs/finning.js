@@ -42,74 +42,98 @@ const getPageJobLinks = async (page) => {
     return jobs;
 };
 
-function scrollToLoad(page){
-    return page.evaluate(() => {
-        return new Promise((resolve, reject) => {
-            
-            
-            var timer = setInterval(() => {
-                var scrollHeight = document.body.scrollHeight;
-                debugger;
-                
-                window.scrollBy(0, distance);
-                totalHeight += distance;
+const extractJobs = () => {
+    const jobElements = $('div.gwt-Label.WOTO.WISO');
+    const jobs = [];
 
-                if(totalHeight >= scrollHeight){
-                    clearInterval(timer);
-                    resolve();
-                }
-            }, 100);
-        })
-    });
-}
+    debugger;
+    
+    /*
+     * URLs are constructed from the <location>/<job-title>/<job-ID> like
+     *   
+     *   https://finning.wd3.myworkdayjobs.com/en-US/External/job/Sucursal-Lo-Boza/Administrador-de-plataformas-de-Monitoreo_R-2018-6001
+     *
+     * Each job has a job title followed by the subheader which contains the 
+     * location and job id:
+     *
+     *   Heavy Duty Mechanic - Field
+     *   Fort McMurray - TCRS | R-2019-94 | Posted Yesterday
+     */
+
+     */
+    for (const e of jobElements) {
+        let subHeader = $(e).closest('div.WJYF.WHYF')
+            .find('span.gwt-InlineLabel.WM-F.WLYF')
+            .text();
+
+        let parts = subHeader
+            .split('|')
+            .map(e => e.trim());
+        
+        jobs.push({
+            title: $(e).text(),
+            location: parts[0],
+            jobId: parts[1]
+        });
+    }
+
+    return jobs;
+};
 
 const getJobLinks = async (page) => {
-    let jobLinkSel = 'div.gwt-Label WOTO WISO';
-    
+    let jobs = [];
+
     await page.goto(Company.jobs_page);
     await page.waitFor(
         id => document.querySelector(`span#${id}`),
         {}, /* opts */
         'wd-FacetedSearchResultList-PaginationText-facetSearchResultList\\.newFacetSearch\\.Report_Entry'
     );
+    
+    await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery
 
     let totalJobsStr = await page.evaluate(
         id => document.querySelector(`span#${id}`).innerText,
         'wd-FacetedSearchResultList-PaginationText-facetSearchResultList\\.newFacetSearch\\.Report_Entry'
     );
 
-    let totalJobsNum = /(\d+)\s+Results/.exec(totalJobsStr)[1];
-
-    console.log(`Scrolling until we get ${totalJobsNum} jobs`);
+    let totalNumJobs = parseInt( /(\d+)\s+Results/.exec(totalJobsStr)[1] );
     
+    console.log(`Scrolling until we get ${totalNumJobs} jobs`);
+
     /* Scroll until scrolling no longer triggers any more job fetches */
     await page.setRequestInterception(true);
-    
-    const xhrSent = new Promise(
-        resolve =>
-            page.on('request', request => {
-                if (request.resourceType() === "xhr") {
-                    console.log(request.url());
-                    resolve();
-                }
-                request.continue();
-            })
-    );
 
-    const xhrResp = new Promise(
-        resolve =>
-            page.on('response', response => {
-                if (response.request().resourceType() === "xhr" &&
-                    response.request().url().includes('searchPagination')) {
-                    resolve();
-                }
-                response.continue();
-            })
-    );
+    while (jobs.length < totalNumJobs) {
+        /* Log when the request gets sent out */
+        const xhrSent = new Promise(
+            resolve =>
+                page.on('request', request => {
+                    if (request.resourceType() === "xhr") {
+                        console.log(request.url());
+                        resolve();
+                    }
+                    request.continue();
+                })
+        );
+
+        /* Wait until we get the next page of results */
+        const xhrResp = new Promise(
+            resolve =>
+                page.on('response', response => {
+                    if (response.request().resourceType() === "xhr" &&
+                        response.request().url().includes('searchPagination')) {
+                        resolve();
+                    }
+                })
+        );
     
-    await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
-    await xhrSent;
-    await xhrResp;    
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+        await xhrSent;
+        await xhrResp;
+
+        jobs = await page.evaluate(extractJobs);
+    }
     
     return jobs;
 };
