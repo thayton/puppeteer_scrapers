@@ -42,39 +42,27 @@ const getPageJobLinks = async (page) => {
     return jobs;
 };
 
-const extractJobs = () => {
-    const jobElements = $('div.gwt-Label.WOTO.WISO');
+const extractJobs = async (page) => {
+    const jobElements = await page.$$('div.gwt-Label.WOTO.WISO');
     const jobs = [];
 
-    debugger;
-    
     /*
-     * URLs are constructed from the <location>/<job-title>/<job-ID> like
-     *   
-     *   https://finning.wd3.myworkdayjobs.com/en-US/External/job/Sucursal-Lo-Boza/Administrador-de-plataformas-de-Monitoreo_R-2018-6001
+     * If you right click each job link a popup menu lets you copy
+     * the job URL. Then within the menu we look for a div like the
+     * following:
      *
-     * Each job has a job title followed by the subheader which contains the 
-     * location and job id:
-     *
-     *   Heavy Duty Mechanic - Field
-     *   Fort McMurray - TCRS | R-2019-94 | Posted Yesterday
-     */
-
+     *   <div data-automation-id="copyUrl" title="Copy URL" data-clipboard-text="<url-to-extract>"
      */
     for (const e of jobElements) {
-        let subHeader = $(e).closest('div.WJYF.WHYF')
-            .find('span.gwt-InlineLabel.WM-F.WLYF')
-            .text();
-
-        let parts = subHeader
-            .split('|')
-            .map(e => e.trim());
+        await e.click({ button: 'right' });
         
-        jobs.push({
-            title: $(e).text(),
-            location: parts[0],
-            jobId: parts[1]
-        });
+        const menu = await page.waitFor('div.WET.wd-popup-content'); /* wait for popup menu to appear */
+        const [ div ] = await menu.$x('//div[@data-automation-id="copyUrl"]');
+        const url = await page.evaluate(e => e.getAttribute('data-clipboard-text', div));
+        
+        console.log(url);
+        
+        jobs.push(url);
     }
 
     return jobs;
@@ -82,7 +70,7 @@ const extractJobs = () => {
 
 const getJobLinks = async (page) => {
     let jobs = [];
-
+    
     await page.goto(Company.jobs_page);
     await page.waitFor(
         id => document.querySelector(`span#${id}`),
@@ -103,8 +91,9 @@ const getJobLinks = async (page) => {
 
     /* Scroll until scrolling no longer triggers any more job fetches */
     await page.setRequestInterception(true);
-
-    while (jobs.length < totalNumJobs) {
+    let numJobs = await page.evaluate("document.querySelectorAll('div.gwt-Label.WOTO.WISO').length");
+    
+    while (numJobs < totalNumJobs) {
         /* Log when the request gets sent out */
         const xhrSent = new Promise(
             resolve =>
@@ -132,9 +121,10 @@ const getJobLinks = async (page) => {
         await xhrSent;
         await xhrResp;
 
-        jobs = await page.evaluate(extractJobs);
+        jobs = await extractJobs(page);
     }
-    
+
+    jobs = await extractJobs(page);
     return jobs;
 };
 
