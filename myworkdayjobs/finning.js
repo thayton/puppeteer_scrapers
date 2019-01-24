@@ -18,79 +18,49 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-const getPageJobLinks = async (page) => {
-    await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery
-    const jobs = await page.evaluate(() => {
-        const jobs = [];
-        
-        $('tr[id^="job"]').each(function (i, tr) {
-            const j = {};
-            const a = $(tr).find('a');
-            
-            j.title = a.contents()[0].textContent.trim();
-            j.url = a[0].href;
-            j.location = $($(tr).find('td')[1]).text();
-            j.postingDate = $($(tr).find('td')[2]).text();
-            j.jobNumber = $($(tr).find('td')[3]).text();
-            
-            jobs.push(j);
-        });
-
-        return jobs;
-    });
-
-    return jobs;
-};
-
+/*
+ * Extract a list of job links by right clicking each link. If 
+ * you right click each job link a popup menu lets you copy the 
+ * job URL. Then within the menu we look for a div like the 
+ * following:
+ *
+ *   <div data-automation-id="copyUrl" title="Copy URL" data-clipboard-text="<url-to-extract>"
+ */
 const extractJobs = async (page) => {
     const jobElements = await page.$$('div.gwt-Label.WOTO.WISO');
     const jobs = [];
 
-    /*
-     * If you right click each job link a popup menu lets you copy
-     * the job URL. Then within the menu we look for a div like the
-     * following:
-     *
-     *   <div data-automation-id="copyUrl" title="Copy URL" data-clipboard-text="<url-to-extract>"
-     */
     for (const e of jobElements) {
+        let title = await page.evaluate(e => e.innerText, e);
+        
         await e.click({ button: 'right' });
         
         const menu = await page.waitFor('div.WET.wd-popup-content'); /* wait for popup menu to appear */
         const [ div ] = await menu.$x('//div[@data-automation-id="copyUrl"]');
-        const url = await page.evaluate(e => e.getAttribute('data-clipboard-text', div));
+        const url = await page.evaluate(e => e.getAttribute('data-clipboard-text'), div);
         
         console.log(url);
         
-        jobs.push(url);
+        jobs.push({ title, url });
     }
 
     return jobs;
 };
 
-const getJobLinks = async (page) => {
-    let jobs = [];
-    
-    await page.goto(Company.jobs_page);
-    await page.waitFor(
-        id => document.querySelector(`span#${id}`),
-        {}, /* opts */
-        'wd-FacetedSearchResultList-PaginationText-facetSearchResultList\\.newFacetSearch\\.Report_Entry'
-    );
-    
-    await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery
-
+const scroll = async (page) => {
     let totalJobsStr = await page.evaluate(
         id => document.querySelector(`span#${id}`).innerText,
         'wd-FacetedSearchResultList-PaginationText-facetSearchResultList\\.newFacetSearch\\.Report_Entry'
     );
 
-    let totalNumJobs = parseInt( /(\d+)\s+Results/.exec(totalJobsStr)[1] );
-    
-    console.log(`Scrolling until we get ${totalNumJobs} jobs`);
+    let totalNumJobs = parseInt(
+            /(\d+)\s+Results/.exec(totalJobsStr)[1]
+    );
 
-    /* Scroll until scrolling no longer triggers any more job fetches */
+    /* Scroll until scrolling no longer triggers any more job fetches */    
+    console.log(`Scrolling until we get ${totalNumJobs} jobs`);
     await page.setRequestInterception(true);
+    
     let numJobs = await page.evaluate("document.querySelectorAll('div.gwt-Label.WOTO.WISO').length");
     
     while (numJobs < totalNumJobs) {
@@ -121,19 +91,23 @@ const getJobLinks = async (page) => {
         await xhrSent;
         await xhrResp;
 
-        jobs = await extractJobs(page);
+        numJobs = await page.evaluate("document.querySelectorAll('div.gwt-Label.WOTO.WISO').length");
+        break; // XXX
     }
-
-    jobs = await extractJobs(page);
-    return jobs;
 };
 
-const getJobDescriptions = async (page, jobs) => {
-    for (const j of jobs) {
-        await page.goto(j.url);
-        await page.addScriptTag({url: 'https://code.jquery.com/jquery-3.3.1.min.js'}); // Inject jQuery
-        j.description = await page.evaluate(() => $('div[class^="mastercontentpanel"] table.tablelist').html());
-    }
+const getJobLinks = async (page) => {
+    await page.goto(Company.jobs_page);
+    await page.waitFor(
+        id => document.querySelector(`span#${id}`),
+        {}, /* opts */
+        'wd-FacetedSearchResultList-PaginationText-facetSearchResultList\\.newFacetSearch\\.Report_Entry'
+    );
+    
+    await scroll(page);
+    
+    let jobs = await extractJobs(page);
+    return jobs;
 };
 
 const main = async () => {
