@@ -41,14 +41,11 @@ const extractJobs = async (page) => {
         const [ div ] = await menu.$x('//div[@data-automation-id="copyUrl"]');
         const url = await page.evaluate(e => e.getAttribute('data-clipboard-text'), div);
 
-        /* 
-         * Send ESC to make the popup menu disappear and wait for the menu 
-         * to disappear 
-         */
-        await page.keyboard.down('Escape');
-        await page.waitFor(() => !document.querySelector('div.WET.wd-popup-content'));
-        
         console.log(url);
+
+        /* Click in on the item makes the popup menu disappear */
+        await div.click()
+        await page.waitFor(() => !document.querySelector('div.WET.wd-popup-content'));
         
         jobs.push({ title, url });
     }
@@ -123,8 +120,8 @@ const getJobLinks = async (page) => {
 };
 
 const main = async () => {
-    const browser = await puppeteer.launch({ slowMo: 250, headless: false, devtools: true });
-    //const browser = await puppeteer.launch();    
+    //const browser = await puppeteer.launch({ slowMo: 250, headless: false, devtools: true });
+    const browser = await puppeteer.launch();    
     const [ page ] = await browser.pages();
     page.on('console', msg => console.log('> ', msg.text()));
     
