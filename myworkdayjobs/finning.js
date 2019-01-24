@@ -34,10 +34,19 @@ const extractJobs = async (page) => {
         let title = await page.evaluate(e => e.innerText, e);
         
         await e.click({ button: 'right' });
+
+        /* Wait for popup menu to appear underneath our element */
+        const menu = await page.waitFor('div.WET.wd-popup-content');
         
-        const menu = await page.waitFor('div.WET.wd-popup-content'); /* wait for popup menu to appear */
         const [ div ] = await menu.$x('//div[@data-automation-id="copyUrl"]');
         const url = await page.evaluate(e => e.getAttribute('data-clipboard-text'), div);
+
+        /* 
+         * Send ESC to make the popup menu disappear and wait for the menu 
+         * to disappear 
+         */
+        await page.keyboard.down('Escape');
+        await page.waitFor(() => !document.querySelector('div.WET.wd-popup-content'));
         
         console.log(url);
         
@@ -82,6 +91,7 @@ const scroll = async (page) => {
                 page.on('response', response => {
                     if (response.request().resourceType() === "xhr" &&
                         response.request().url().includes('searchPagination')) {
+                        console.log('Response received');
                         resolve();
                     }
                 })
@@ -90,8 +100,10 @@ const scroll = async (page) => {
         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
         await xhrSent;
         await xhrResp;
+        await page.waitForFunction(`document.querySelectorAll('div.gwt-Label.WOTO.WISO').length > ${numJobs}`);
 
         numJobs = await page.evaluate("document.querySelectorAll('div.gwt-Label.WOTO.WISO').length");
+        console.log(`numJobs = ${numJobs}`);
         break; // XXX
     }
 };
@@ -114,14 +126,11 @@ const main = async () => {
     const browser = await puppeteer.launch({ slowMo: 250, headless: false, devtools: true });
     //const browser = await puppeteer.launch();    
     const [ page ] = await browser.pages();
-
-    const jobs = await getJobLinks(page);
-    //await getJobDescriptions(page, jobs);
-    
     page.on('console', msg => console.log('> ', msg.text()));
+    
+    const jobs = await getJobLinks(page);
 
     await browser.close()
-
     return jobs;
 };
 
