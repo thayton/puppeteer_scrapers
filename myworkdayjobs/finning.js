@@ -63,13 +63,13 @@ const getNumJobsListed = () => {
 const scrollToEnd = async (page) => {
     let totalNumJobs = await getTotalNumJobs(page);
     let numJobs = await page.evaluate(getNumJobsListed);
-    let scrollHeight = await page.evaluate('document.body.scrollHeight');
+    let scrollHeight = await page.evaluate('document.documentElement.scrollHeight');
 
     while (numJobs < totalNumJobs) {
         console.log(`# jobs = ${numJobs}`);
         
-        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
-        await page.waitForFunction(`document.body.scrollHeight > ${scrollHeight}`);
+        await page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)');
+        await page.waitForFunction(`document.documentElement.scrollHeight > ${scrollHeight}`);
         
         scrollHeight = await page.evaluate('document.body.scrollHeight');
         numJobs = await page.evaluate(getNumJobsListed);
