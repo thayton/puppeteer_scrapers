@@ -55,26 +55,33 @@ const getTotalNumJobs = async (page) => {
 };
 
 /* Return the number of jobs currently listed on the page */
-const getNumJobs = () => {
+const getNumJobsListed = () => {
     return Array.from(document.querySelectorAll('div[id^="promptOption-gwt-uid-"]')).length;
 };
 
-/* Scroll until scrolling no longer triggers any more job fetches */    
-const scroll = async (page) => {
+/* Scroll until we reach the end of the jobs list */    
+const scrollToEnd = async (page) => {
     let totalNumJobs = await getTotalNumJobs(page);
-    let numJobs = await (await page.$$('div[id^="promptOption-gwt-uid-"]')).length;
+    let numJobs = await page.evaluate(getNumJobsListed);
+    let scrollHeight = await page.evaluate('document.body.scrollHeight');
 
     while (numJobs < totalNumJobs) {
-        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
-        await page.waitForFunction(
-            `document.querySelectorAll('div[id^="promptOption-gwt-uid-"').length > ${numJobs}`
-        );
+        console.log(`# jobs = ${numJobs}`);
         
-        numJobs = await (await page.$$('div[id^="promptOption-gwt-uid-"]')).length;
-        console.log(`numJobs = ${numJobs}`);        
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+        await page.waitForFunction(`document.body.scrollHeight > ${scrollHeight}`);
+        
+        scrollHeight = await page.evaluate('document.body.scrollHeight');
+        numJobs = await page.evaluate(getNumJobsListed);
     }
+
+    console.log(`# jobs = ${numJobs}`); 
 };
 
+/*
+ * Scroll the page until all of the jobs are listed and then extract
+ * and return the list of job titles and links
+ */
 const getJobLinks = async (page) => {
     await page.goto(Company.jobs_page);
     await page.waitFor(
@@ -83,23 +90,7 @@ const getJobLinks = async (page) => {
         'wd-FacetedSearchResultList-PaginationText-facetSearchResultList\\.newFacetSearch\\.Report_Entry'
     );
 
-    /* Log when the requests gets sent out */
-    page.on('request', request => {
-        if (request.resourceType() === "xhr" &&
-            request.url().includes('searchPagination')) { 
-            console.log('Request sent ' + request.url());
-        }
-    });
-
-    /* Log when the responses comes back */
-    page.on('response', response => {
-        if (response.request().resourceType() === "xhr" &&
-            response.request().url().includes('searchPagination')) {
-            console.log('Response received');
-        }
-    });
-    
-    await scroll(page);
+    await scrollToEnd(page);
     
     let jobs = await extractJobs(page);
     return jobs;
@@ -110,7 +101,21 @@ const main = async () => {
     const browser = await puppeteer.launch();    
     const [ page ] = await browser.pages();
 
-    page.on('console', msg => console.log('> ', msg.text()));
+    /* Log when the requests gets sent out */
+    page.on('request', request => {
+        if (request.resourceType() === "xhr" &&
+            request.url().includes('External')) { 
+            console.log('Request sent ' + request.url());
+        }
+    });
+
+    /* Log when the responses comes back */
+    page.on('response', response => {
+        if (response.request().resourceType() === "xhr" &&
+            response.request().url().includes('External')) {
+            console.log('Response received');
+        }
+    });
     
     const jobs = await getJobLinks(page);
 
@@ -119,6 +124,5 @@ const main = async () => {
 };
 
 main().then((jobs) => {
-    console.log(`# jobs = ${jobs.length}`);
     console.log(JSON.stringify(jobs, null, 2));
 });
